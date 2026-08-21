@@ -1,4 +1,6 @@
+import json
 import logging
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -466,21 +468,25 @@ class Controller:
 
         Scans backward from the current frame for the first frame whose label
         file has any objects, imports those boxes (fresh copies) and appends
-        them to the current frame without disturbing existing boxes.
+        them to the current frame without disturbing existing boxes. Sonar link
+        IDs of the copied boxes are carried over as well.
         """
         pm = self.pcd_manager
         for idx in range(pm.current_id - 1, -1, -1):
+            src_stem = pm.pcds[idx].stem
             candidates = pm.label_manager.import_labels(pm.pcds[idx])
             if candidates:
+                base_index = len(self.bbox_controller.bboxes)
                 for bbox in candidates:
                     self.bbox_controller.add_bbox(bbox)
+                self._copy_sonar_ids(src_stem, base_index, len(candidates))
                 logging.info(
                     "Copied %d label(s) from %s into the current frame.",
                     len(candidates),
-                    pm.pcds[idx].stem,
+                    src_stem,
                 )
                 self.view.status_manager.set_message(
-                    f"Copied {len(candidates)} label(s) from {pm.pcds[idx].stem}.",
+                    f"Copied {len(candidates)} label(s) from {src_stem}.",
                     context=Context.DEFAULT,
                 )
                 return
@@ -488,6 +494,35 @@ class Controller:
         self.view.status_manager.set_message(
             "No earlier labeled frame to copy from.", context=Context.DEFAULT
         )
+
+    def _copy_sonar_ids(self, src_stem: str, base_index: int, count: int) -> None:
+        """Carry sonar link IDs from a source frame onto freshly copied boxes.
+
+        The copied boxes occupy indices base_index .. base_index+count-1 in the
+        current frame; map each to the source frame's link ID at the same
+        relative index. No-op if the camera-panel link-ID machinery is absent
+        or the source frame has no link IDs.
+        """
+        view = self.view
+        if not hasattr(view, "_sonar_ids"):
+            return
+        src_ids_path = Path(config.get("FILE", "label_folder")) / (src_stem + "_ids.json")
+        if not src_ids_path.is_file():
+            return
+        try:
+            with open(src_ids_path) as f:
+                src_ids = {int(k): v for k, v in json.load(f).items()}
+        except (json.JSONDecodeError, OSError, ValueError):
+            return
+        for i in range(count):
+            link_id = src_ids.get(i, 0)
+            if link_id:
+                view._sonar_ids[base_index + i] = link_id
+        if hasattr(view, "_save_sonar_ids"):
+            view._save_sonar_ids()
+        if hasattr(view, "sonar_id_spin"):
+            cur = view.label_list.currentRow()
+            view.sonar_id_spin.setValue(view._sonar_ids.get(cur, 0))
 
     def key_release_event(self, a0: QtGui.QKeyEvent) -> None:
         """Triggers actions when the user releases a key."""

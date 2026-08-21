@@ -21,6 +21,7 @@ files = {
     "numpy_handler.py": pkg / "io"      / "pointclouds" / "numpy.py",
     "gui.py":           pkg / "view"     / "gui.py",
     "controller.py":    pkg / "control"  / "controller.py",
+    "centroid.py":      pkg / "io"       / "labels" / "centroid.py",
 }
 
 for src_name, dst in files.items():
