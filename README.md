@@ -2,7 +2,7 @@
 
 3D 소나 + 2D 카메라 다이버 어노테이션 툴 ([labelCloud](https://github.com/ch-sa/labelCloud) 기반).
 
-이 가이드는 비공개 저장소 접근, 데이터셋 내려받기, 환경 설정, 첫 라벨링 세션 시작까지의 과정을 순서대로 안내합니다. **모든 단계를 순서대로** 따라 주세요.
+이 가이드는 저장소 clone, 데이터셋 내려받기, 환경 설정, 첫 라벨링 세션 시작까지의 과정을 순서대로 안내합니다. **모든 단계를 순서대로** 따라 주세요.
 
 ---
 
@@ -12,56 +12,22 @@
 
 - **Git** — https://git-scm.com
 - **Miniconda** 또는 **Anaconda** — https://docs.conda.io/en/latest/miniconda.html
-- **GitHub 계정** — https://github.com/join (비공개 저장소 접근에 필요)
 - Python 3.10 은 아래 설정 명령에서 자동으로 설치됩니다.
 
 ---
 
-## 2. 비공개 저장소 접근 권한 받기
+## 2. 저장소 Clone
 
-저장소는 비공개입니다. 관리자에게 본인의 GitHub 사용자명을 collaborator로 추가해 달라고 요청하세요. 추가되면 이메일 초대가 오며, **초대를 수락한 뒤** 진행합니다.
-
-저장소 URL:
-
-```
-github.com/pegguiitar/diver-labeling-tool
-```
-
-HTTPS로 clone 하려면 **Personal Access Token(PAT)** 이 필요합니다. GitHub는 더 이상 계정 비밀번호로 git 작업을 허용하지 않습니다.
-
-PAT 생성 방법:
-
-1. GitHub 로그인 후 **Settings > Developer settings > Personal access tokens > Tokens (classic)** 로 이동
-2. **Generate new token (classic)** 클릭
-3. 이름 지정(예: `diver-labeling-tool`), 만료기간 90일 설정
-4. Scopes에서 **repo** (전체 저장소 접근) 체크
-5. **Generate token** 클릭 후 토큰을 **즉시 복사** — 다시는 볼 수 없습니다.
-
-> 토큰은 비공개로 관리하세요. 절대 공유하거나 저장소에 커밋하지 마세요. 분실 시 새로 발급하면 됩니다.
-
----
-
-## 3. 저장소 Clone
-
-터미널(Windows는 Anaconda Prompt)을 열고 실행:
+이 저장소는 **공개(public)** 이므로 별도의 접근 권한이나 토큰 없이 바로 clone 할 수 있습니다. 터미널(Windows는 Anaconda Prompt)을 열고 실행:
 
 ```bash
 git clone https://github.com/pegguiitar/diver-labeling-tool.git
 cd diver-labeling-tool
 ```
 
-사용자명 입력창에는 GitHub 사용자명을, 비밀번호 입력창에는 **PAT**(GitHub 비밀번호 아님)를 붙여넣습니다.
-
-매번 묻지 않게 하려면 자격 증명을 캐시하세요:
-
-```bash
-git config --global credential.helper store
-# 이후 git pull/push 를 한 번 성공하면 자격 증명이 저장됩니다.
-```
-
 ---
 
-## 4. 데이터셋 내려받기
+## 3. 데이터셋 내려받기
 
 데이터셋과 튜토리얼 영상은 Google Drive에 있습니다. 아래 링크에서 내려받으세요.
 
@@ -104,7 +70,7 @@ git config --global credential.helper store
 
 ---
 
-## 5. Conda 환경 생성
+## 4. Conda 환경 생성
 
 아래 명령으로 환경을 만들고 활성화합니다:
 
@@ -119,7 +85,7 @@ pip install "setuptools<70"
 
 ---
 
-## 6. labelCloud 패치 적용
+## 5. labelCloud 패치 적용
 
 이 툴은 설치된 labelCloud 패키지에 4가지 수정(카메라 패널 통합, 소나 좌표 보정, 프레임 동기화 훅, 라벨 저장 포맷 보존)을 필요로 합니다. 아래 스크립트가 모두 자동 적용합니다:
 
@@ -139,7 +105,7 @@ Done.
 
 ---
 
-## 7. Python 경로 설정
+## 6. Python 경로 설정
 
 `label_scene.py`(그리고 `auto_track.py`)를 열어 파일 상단의 `LABELCLOUD_PYTHON` 변수를 본인 conda 환경의 Python 실행 파일 경로로 수정합니다.
 
@@ -159,7 +125,7 @@ LABELCLOUD_PYTHON = Path("/home/<사용자명>/miniconda3/envs/labelcloud/bin/py
 
 ---
 
-## 8. 라벨링 툴 실행
+## 7. 라벨링 툴 실행
 
 저장소 루트 폴더에 있고 base conda 환경이 활성화된 상태인지 확인하세요. labelcloud 환경을 수동으로 활성화할 필요는 없습니다 — 스크립트가 대신 실행합니다.
 
@@ -190,7 +156,7 @@ python3 auto_track.py Person1 49 --modality sonar
 
 ---
 
-## 9. 라벨링 워크플로우
+## 8. 라벨링 워크플로우
 
 - 왼쪽 패널: 3D 소나 포인트클라우드(높이별 색상).
 - 오른쪽 아래 패널: 같은 프레임의 카메라 이미지.
@@ -225,7 +191,7 @@ python3 auto_track.py Person1 49 --modality sonar
 
 ---
 
-## 10. 객체 클래스
+## 9. 객체 클래스
 
 `labels/_classes.json` 에 정의되어 있습니다:
 
@@ -242,9 +208,9 @@ python3 auto_track.py Person1 49 --modality sonar
 
 ---
 
-## 11. 출력 어노테이션 포맷
+## 10. 출력 어노테이션 포맷
 
-### 11.1 프레임별 라벨 파일 (`labels/frame_XXXXXX.json`)
+### 10.1 프레임별 라벨 파일 (`labels/frame_XXXXXX.json`)
 
 labelCloud가 각 프레임을 **centroid_abs** 포맷으로 읽고 씁니다. 저장 시 오일러 각(`rotations`)뿐 아니라 **quaternion(오일러에서 재계산)** 과 업스트림 파이프라인이 부착한 플래그(`_body_frame`, `_axis_flip_v2`, `_personN_reflip` 등)가 **보존**됩니다:
 
@@ -270,7 +236,7 @@ labelCloud가 각 프레임을 **centroid_abs** 포맷으로 읽고 씁니다. �
 
 > 패치되지 않은 labelCloud로 이미 저장되어 `quaternion`·플래그가 사라진 프레임은 소급 복원되지 않습니다(파일에 남은 정보가 없어 이어붙일 수 없음). 패치 적용 후 저장하는 프레임부터 보존됩니다.
 
-### 11.2 씬별 통합 파일 (`annotations/scene_XXXX.json`)
+### 10.2 씬별 통합 파일 (`annotations/scene_XXXX.json`)
 
 프레임별 라벨은 **`converted_labels/<Person>/annotations/scene_XXXX.json`** 으로 통합됩니다. 소나 객체는 **원본 라벨의 모든 필드**(전체 `rotations` x/y/z, `quaternion`, per-annotator 플래그)를 그대로 유지하고, 그 위에 집계용 `class`·`link_id` 를 추가합니다. 카메라 객체는 정규화된 2D 박스를 가집니다. 같은 `link_id` 값은 두 센서가 본 동일한 물리적 객체를 의미합니다:
 
