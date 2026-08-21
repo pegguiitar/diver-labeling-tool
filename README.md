@@ -1,92 +1,278 @@
 # Diver Labeling Tool
 
-3D sonar + 2D camera annotation tool for diver scenes, built on top of [labelCloud](https://github.com/ch-sa/labelCloud).
+3D 소나 + 2D 카메라 다이버 어노테이션 툴 ([labelCloud](https://github.com/ch-sa/labelCloud) 기반).
 
-Scenes are organized per annotator under `converted_labels/<Person>/<scene_id>/`, each
-with the same layout as a source scene:
+이 가이드는 비공개 저장소 접근, 데이터셋 내려받기, 환경 설정, 첫 라벨링 세션 시작까지의 과정을 순서대로 안내합니다. **모든 단계를 순서대로** 따라 주세요.
+
+---
+
+## 1. 사전 준비물
+
+계속하기 전에 아래 소프트웨어를 설치하세요.
+
+- **Git** — https://git-scm.com
+- **Miniconda** 또는 **Anaconda** — https://docs.conda.io/en/latest/miniconda.html
+- **GitHub 계정** — https://github.com/join (비공개 저장소 접근에 필요)
+- Python 3.10 은 아래 설정 명령에서 자동으로 설치됩니다.
+
+---
+
+## 2. 비공개 저장소 접근 권한 받기
+
+저장소는 비공개입니다. 관리자에게 본인의 GitHub 사용자명을 collaborator로 추가해 달라고 요청하세요. 추가되면 이메일 초대가 오며, **초대를 수락한 뒤** 진행합니다.
+
+저장소 URL:
 
 ```
-converted_labels/
-  Person1/
-    scene_0000/
-      sonar/     frame_XXXXXX.bin   (3D point clouds)
-      camera/    frame_XXXXXX.jpg   (2D images)
-      labels/    frame_XXXXXX.json  (centroid_abs labelCloud labels)
-      pairs.jsonl
-    annotations/                    (aggregated per-scene JSON, written by the tool)
+github.com/pegguiitar/diver-labeling-tool
 ```
 
-## Setup
+HTTPS로 clone 하려면 **Personal Access Token(PAT)** 이 필요합니다. GitHub는 더 이상 계정 비밀번호로 git 작업을 허용하지 않습니다.
 
-### 1. Create and activate the conda environment
+PAT 생성 방법:
+
+1. GitHub 로그인 후 **Settings > Developer settings > Personal access tokens > Tokens (classic)** 로 이동
+2. **Generate new token (classic)** 클릭
+3. 이름 지정(예: `diver-labeling-tool`), 만료기간 90일 설정
+4. Scopes에서 **repo** (전체 저장소 접근) 체크
+5. **Generate token** 클릭 후 토큰을 **즉시 복사** — 다시는 볼 수 없습니다.
+
+> 토큰은 비공개로 관리하세요. 절대 공유하거나 저장소에 커밋하지 마세요. 분실 시 새로 발급하면 됩니다.
+
+---
+
+## 3. 저장소 Clone
+
+터미널(Windows는 Anaconda Prompt)을 열고 실행:
+
+```bash
+git clone https://github.com/pegguiitar/diver-labeling-tool.git
+cd diver-labeling-tool
+```
+
+사용자명 입력창에는 GitHub 사용자명을, 비밀번호 입력창에는 **PAT**(GitHub 비밀번호 아님)를 붙여넣습니다.
+
+매번 묻지 않게 하려면 자격 증명을 캐시하세요:
+
+```bash
+git config --global credential.helper store
+# 이후 git pull/push 를 한 번 성공하면 자격 증명이 저장됩니다.
+```
+
+---
+
+## 4. 데이터셋 내려받기
+
+데이터셋과 튜토리얼 영상은 Google Drive에 있습니다. 아래 링크에서 내려받으세요.
+
+```
+<관리자에게 문의: converted_labels 데이터셋 Google Drive 링크>
+```
+
+- 데이터를 압축 해제하여 **`converted_labels/` 폴더가 clone 한 저장소 폴더와 같은 부모 디렉토리 아래(형제 위치)에 오도록** 배치합니다.
+- 튜토리얼 영상(mp4)을 첫 라벨링 세션 전에 시청하세요 — 툴 조작을 시연합니다.
+
+압축 해제 후 폴더 구조는 다음과 같아야 합니다 (저장소 폴더와 `converted_labels/` 가 **형제**):
+
+```
+<부모 폴더>/
+    diver-labeling-tool/        ← clone 한 저장소
+        label_scene.py
+        auto_track.py
+        camera_panel.py
+        config.ini
+        labels/
+        patches/
+    converted_labels/           ← 데이터셋 (저장소와 형제 위치)
+        Person1/
+            scene_0000/
+                sonar/          (3D 소나 포인트클라우드, frame_XXXXXX.bin)
+                camera/         (2D 이미지, frame_XXXXXX.jpg)
+                labels/         (centroid_abs labelCloud 라벨, frame_XXXXXX.json)
+                pairs.jsonl
+            scene_0042/
+            ...
+            annotations/        (툴이 생성하는 씬별 통합 JSON)
+        Person2/
+        Person3/
+        Person4/
+```
+
+> 본인은 배정받은 **Person 폴더**(예: `Person1`)에 대해서만 작업합니다. 아래 실행 명령의 첫 인자가 이 Person 폴더입니다.
+
+> **경로가 다른 경우:** 툴은 `converted_labels/` 를 저장소 폴더의 부모 디렉토리에서 찾습니다(`label_scene.py`, `auto_track.py` 의 `CONVERTED_DIR = DATA_DIR / "converted_labels"`). 데이터를 다른 위치에 두었다면 두 파일의 `CONVERTED_DIR` 값을 본인 환경에 맞게 수정하세요.
+
+---
+
+## 5. Conda 환경 생성
+
+아래 명령으로 환경을 만들고 활성화합니다:
 
 ```bash
 conda create -n labelcloud python=3.10 -y
 conda activate labelcloud
 pip install labelCloud
-pip install "setuptools<70"   # required for pkg_resources compatibility
+pip install "setuptools<70"
 ```
 
-### 2. Apply patches
+> `setuptools` 버전 고정은 labelCloud가 `pkg_resources`를 사용하기 때문입니다(setuptools >= 70 에서 제거됨).
+
+---
+
+## 6. labelCloud 패치 적용
+
+이 툴은 설치된 labelCloud 패키지에 4가지 수정(카메라 패널 통합, 소나 좌표 보정, 프레임 동기화 훅, 라벨 저장 포맷 보존)을 필요로 합니다. 아래 스크립트가 모두 자동 적용합니다:
 
 ```bash
 python patches/apply_patches.py
 ```
 
-This patches three labelCloud files to add:
-- Y-axis flip correction for sonar coordinate convention
-- Integrated 2D camera annotation panel
-- Sonar link ID support for cross-referencing sonar and camera labels
+다음과 같이 출력되어야 합니다:
 
-### 3. Configure paths
+```
+  patched labelCloud/io/pointclouds/numpy.py
+  patched labelCloud/view/gui.py
+  patched labelCloud/control/controller.py
+  patched labelCloud/io/labels/centroid.py
+Done.
+```
 
-Edit `label_scene.py` (and `auto_track.py`) and update `LABELCLOUD_PYTHON` to point to
-your conda env:
+---
+
+## 7. Python 경로 설정
+
+`label_scene.py`(그리고 `auto_track.py`)를 열어 파일 상단의 `LABELCLOUD_PYTHON` 변수를 본인 conda 환경의 Python 실행 파일 경로로 수정합니다.
+
+Windows:
 
 ```python
-LABELCLOUD_PYTHON = Path(r"path/to/envs/labelcloud/python.exe")   # Windows
-LABELCLOUD_PYTHON = Path("/path/to/envs/labelcloud/bin/python")    # Linux/Mac
+LABELCLOUD_PYTHON = Path(r"C:\Users\<사용자명>\miniconda3\envs\labelcloud\python.exe")
 ```
 
-Both `label_scene.py` and `auto_track.py` resolve scenes under `converted_labels/`,
-which is expected to sit next to this tool directory (`CONVERTED_DIR = DATA_DIR /
-"converted_labels"`). Adjust that constant if your data lives elsewhere.
+macOS / Linux:
 
-## Usage
-
-Label a scene (opens labelCloud, then aggregates labels to annotation JSON). The first
-argument is the person folder, the second is the scene:
-
-```bash
-python label_scene.py Person1 0            # Person1/scene_0000
-python label_scene.py Person3 scene_0019   # explicit scene id
+```python
+LABELCLOUD_PYTHON = Path("/home/<사용자명>/miniconda3/envs/labelcloud/bin/python")
 ```
 
-Convert existing labels without reopening the tool:
+> 정확한 경로를 찾으려면 labelcloud 환경을 활성화한 뒤 `where python`(Windows) 또는 `which python`(Mac/Linux)을 실행하세요.
+
+---
+
+## 8. 라벨링 툴 실행
+
+저장소 루트 폴더에 있고 base conda 환경이 활성화된 상태인지 확인하세요. labelcloud 환경을 수동으로 활성화할 필요는 없습니다 — 스크립트가 대신 실행합니다.
+
+명령 형식은 **`python label_scene.py <Person> <scene>`** 입니다. 첫 인자는 Person 폴더, 둘째 인자는 씬 번호 또는 씬 ID 입니다.
 
 ```bash
-python label_scene.py Person4 65 --convert-only
+# Person1 의 scene_0000 라벨링
+python label_scene.py Person1 0
+
+# Person1 의 scene_0042 라벨링 (씬 ID를 직접 써도 됨)
+python label_scene.py Person1 scene_0042
+
+# 툴을 다시 열지 않고 기존 라벨만 재변환
+python label_scene.py Person1 0 --convert-only
 ```
 
-### Semi-automated propagation (optional)
+labelCloud 창이 열립니다. 창을 닫으면 라벨이 자동으로 통합·저장되어 **`converted_labels/<Person>/annotations/scene_XXXX.json`** 에 기록됩니다.
 
-`auto_track.py` propagates a hand-labeled frame forward/backward within a single scene:
+### (선택) 반자동 라벨 전파
+
+`auto_track.py` 는 손으로 라벨링한 한 프레임을 같은 씬 내에서 앞뒤로 전파합니다:
 
 ```bash
-python3 auto_track.py Person1 49              # both modalities
+python3 auto_track.py Person1 49              # 소나 + 카메라 양쪽
 python3 auto_track.py Person1 49 --dry-run
 python3 auto_track.py Person1 49 --modality sonar
 ```
 
-## Annotation format
+---
 
-Labels are read from and written back into each scene's `labels/` folder in labelCloud's
-**centroid_abs** format (set in `labels/_classes.json`). The per-frame files are then
-aggregated into `converted_labels/<Person>/annotations/<scene_id>.json`.
+## 9. 라벨링 워크플로우
 
-Each aggregated sonar object keeps **every raw label field** — full `rotations` (x/y/z),
-`quaternion`, and any per-annotator flags (e.g. `_person3_reflip`, `_axis_flip_v2`) — with
-the aggregation helpers `class` and `link_id` added on top:
+- 왼쪽 패널: 3D 소나 포인트클라우드(높이별 색상).
+- 오른쪽 아래 패널: 같은 프레임의 카메라 이미지.
+- **Span Bounding Box** 로 소나 포인트클라우드에 3D 박스를 그린 뒤, Sonar Labels 드롭다운에서 클래스를 지정.
+- 카메라 이미지를 클릭·드래그해 2D 박스를 그림.
+- 같은 물리적 객체임을 나타내려면 소나 박스와 카메라 박스에 **같은 Link ID**를 지정.
+- 프레임 이동은 `<< Previous` / `Next >>` 버튼 또는 `R` / `F` 키(← / → 키도 가능).
+- 다음 프레임으로 이동하면 라벨이 자동 저장됩니다.
+
+### 키보드 단축키
+
+| 키 | 동작 |
+|----|------|
+| `R` / `F` (또는 ← / →) | 이전 / 다음 프레임 |
+| `W` `A` `S` `D` | 박스 이동 (앞/왼/뒤/오른) |
+| `Q` / `E` | 박스 위 / 아래 이동 |
+| `Z` / `X` | **Z축** 회전 (반시계 / 시계) |
+| `C` / `V` | **Y축** 회전 (반시계 / 시계) |
+| `B` / `N` | **X축** 회전 (반시계 / 시계) |
+| `I` / `O` | 길이(length) 증가 / 감소 |
+| `K` / `L` | 너비(width) 증가 / 감소 |
+| `,` / `.` | 높이(height) 증가 / 감소 |
+| `T` | **가장 최근 라벨 프레임의 라벨을 현재 프레임으로 복사** (Link ID 포함) |
+| `↑` / `↓` | 이전 / 다음 박스 선택 |
+| `1`–`9` | 번호로 박스 선택 |
+| `Delete` | 선택한 박스 삭제 |
+| `Ctrl` + `S` | 저장 |
+
+> X·Y축 회전(`C`/`V`, `B`/`N`)은 오일러 각을 직접 더하는 대신 회전행렬로 합성해 적용되므로 **짐벌락에 안전**합니다.
+
+> `T` 키는 현재 프레임에서 뒤로 스캔해 객체가 있는 **가장 최근 프레임**을 찾아 그 박스들(과 Link ID)을 현재 프레임에 복사합니다. 기존 박스는 지우지 않고 추가합니다.
+
+---
+
+## 10. 객체 클래스
+
+`labels/_classes.json` 에 정의되어 있습니다:
+
+- Fish
+- Coral
+- Rock
+- Diver *(기본값 — 저장 전 필요 시 변경)*
+- Structure
+- ROV
+- Calibration Board
+- Unassigned
+
+새 클래스를 추가하려면 `labels/_classes.json` 을 편집하고, `camera_panel.py` 의 `CLASS_COLORS` 에도 대응 항목을 추가하세요.
+
+---
+
+## 11. 출력 어노테이션 포맷
+
+### 11.1 프레임별 라벨 파일 (`labels/frame_XXXXXX.json`)
+
+labelCloud가 각 프레임을 **centroid_abs** 포맷으로 읽고 씁니다. 저장 시 오일러 각(`rotations`)뿐 아니라 **quaternion(오일러에서 재계산)** 과 업스트림 파이프라인이 부착한 플래그(`_body_frame`, `_axis_flip_v2`, `_personN_reflip` 등)가 **보존**됩니다:
+
+```json
+{
+  "folder": "sonar",
+  "filename": "frame_000351.bin",
+  "path": ".../Person3/scene_0019/sonar/frame_000351.bin",
+  "objects": [
+    {
+      "name": "Diver",
+      "centroid": {"x": 1.44, "y": -0.94, "z": 0.15},
+      "dimensions": {"length": 0.34, "width": 0.46, "height": 0.95},
+      "rotations": {"x": 0.0, "y": 0.0, "z": 142.0},
+      "quaternion": {"w": 0.3256, "x": 0.0, "y": 0.0, "z": 0.9455},
+      "_body_frame": true,
+      "_axis_flip_v2": true,
+      "_person3_reflip": true
+    }
+  ]
+}
+```
+
+> 패치되지 않은 labelCloud로 이미 저장되어 `quaternion`·플래그가 사라진 프레임은 소급 복원되지 않습니다(파일에 남은 정보가 없어 이어붙일 수 없음). 패치 적용 후 저장하는 프레임부터 보존됩니다.
+
+### 11.2 씬별 통합 파일 (`annotations/scene_XXXX.json`)
+
+프레임별 라벨은 **`converted_labels/<Person>/annotations/scene_XXXX.json`** 으로 통합됩니다. 소나 객체는 **원본 라벨의 모든 필드**(전체 `rotations` x/y/z, `quaternion`, per-annotator 플래그)를 그대로 유지하고, 그 위에 집계용 `class`·`link_id` 를 추가합니다. 카메라 객체는 정규화된 2D 박스를 가집니다. 같은 `link_id` 값은 두 센서가 본 동일한 물리적 객체를 의미합니다:
 
 ```json
 {
@@ -99,18 +285,18 @@ the aggregation helpers `class` and `link_id` added on top:
           "name": "Diver",
           "centroid": {"x": 1.44, "y": -0.94, "z": 0.15},
           "dimensions": {"length": 0.34, "width": 0.46, "height": 0.95},
-          "rotations": {"x": 0.0, "y": 360.0, "z": 360.0},
-          "quaternion": {"w": 1.0, "x": 0.0, "y": -1.22e-16, "z": -6.12e-17},
+          "rotations": {"x": 0.0, "y": 0.0, "z": 142.0},
+          "quaternion": {"w": 0.3256, "x": 0.0, "y": 0.0, "z": 0.9455},
           "_body_frame": true,
           "_axis_flip_v2": true,
           "_person3_reflip": true,
           "class": "Diver-sonar",
-          "link_id": 0
+          "link_id": 1
         },
         {
           "class": "Diver-camera",
           "link_id": 1,
-          "bbox_2d": {"x1": 0.8, "y1": 0.14, "x2": 1.0, "y2": 0.85}
+          "bbox_2d": {"x1": 0.80, "y1": 0.14, "x2": 1.0, "y2": 0.85}
         }
       ]
     }
@@ -118,8 +304,4 @@ the aggregation helpers `class` and `link_id` added on top:
 }
 ```
 
-Sonar and camera labels with the same `link_id` correspond to the same physical object.
-
-## Object classes
-
-Defined in `labels/_classes.json`. Default classes: Unassigned, Fish, Coral, Rock, Diver, Structure.
+> **이전 포맷과의 차이:** 과거에는 소나 객체가 `rotation_z` 하나만 담고 데이터를 `uScenes/annotations/scene_XXXX.json` 에 저장했습니다. 현재는 Person 디렉토리 구조를 유지한 채 `converted_labels/<Person>/annotations/` 에 저장하며, 전체 x/y/z 회전·quaternion·플래그를 모두 보존합니다.
