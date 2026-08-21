@@ -17,6 +17,61 @@ from .drawing_manager import DrawingManager
 from .pcd_manager import PointCloudManger
 
 
+# --------------------------------------------------------------------------- #
+# Gimbal-lock-safe rotation helpers.
+#
+# labelCloud stores an orientation as three Euler angles (x, y, z) that are
+# applied, at render/export time, in the order Z -> Y -> X (see BBox.draw_bbox:
+# glRotate(z,Z); glRotate(y,Y); glRotate(x,X)). Incrementing one Euler component
+# in isolation is not a true rotation about a fixed axis once the other two are
+# non-zero, and it degenerates completely at y = +/-90 deg (gimbal lock).
+#
+# To stay well-behaved we instead compose the increment as a real rotation
+# matrix onto the box's current orientation (body frame) and decompose the
+# result back into the same Z-Y-X Euler triple, using a singularity-robust
+# decomposition. Interaction never locks up; only the stored representation is
+# ambiguous exactly at the poles, and that is resolved deterministically.
+# --------------------------------------------------------------------------- #
+def _rot_x(a: float) -> np.ndarray:
+    c, s = np.cos(a), np.sin(a)
+    return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+
+
+def _rot_y(a: float) -> np.ndarray:
+    c, s = np.cos(a), np.sin(a)
+    return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+
+
+def _rot_z(a: float) -> np.ndarray:
+    c, s = np.cos(a), np.sin(a)
+    return np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+
+
+def _euler_zyx_to_matrix(x_deg: float, y_deg: float, z_deg: float) -> np.ndarray:
+    """Build R = Rz(z) @ Ry(y) @ Rx(x) from degrees (labelCloud's render order)."""
+    return (
+        _rot_z(np.deg2rad(z_deg))
+        @ _rot_y(np.deg2rad(y_deg))
+        @ _rot_x(np.deg2rad(x_deg))
+    )
+
+
+def _matrix_to_euler_zyx(R: np.ndarray) -> tuple:
+    """Decompose R = Rz(z) @ Ry(y) @ Rx(x) back to (x, y, z) degrees, pole-safe."""
+    sy = min(1.0, max(-1.0, -R[2, 0]))
+    cy = float(np.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2))
+    if cy > 1e-6:
+        x = np.arctan2(R[2, 1], R[2, 2])
+        y = np.arctan2(sy, cy)
+        z = np.arctan2(R[1, 0], R[0, 0])
+    else:
+        # Gimbal lock (y = +/-90): fix yaw at 0 and fold it into roll.
+        x = np.arctan2(-R[1, 2], R[1, 1])
+        y = np.arctan2(sy, cy)
+        z = 0.0
+    return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)
+
+
 class Controller:
     MOVEMENT_THRESHOLD = 0.1
 
@@ -287,17 +342,17 @@ class Controller:
             # z rotate clockwise
             self.bbox_controller.rotate_around_z(clockwise=True)
         elif a0.key() == Keys.Key_C:
-            # y rotate counterclockwise
-            self.bbox_controller.rotate_around_y()
+            # y rotate counterclockwise (gimbal-safe, body frame)
+            self.rotate_active_bbox_safe("y")
         elif a0.key() == Keys.Key_V:
             # y rotate clockwise
-            self.bbox_controller.rotate_around_y(clockwise=True)
+            self.rotate_active_bbox_safe("y", clockwise=True)
         elif a0.key() == Keys.Key_B:
-            # x rotate counterclockwise
-            self.bbox_controller.rotate_around_x()
+            # x rotate counterclockwise (gimbal-safe, body frame)
+            self.rotate_active_bbox_safe("x")
         elif a0.key() == Keys.Key_N:
             # x rotate clockwise
-            self.bbox_controller.rotate_around_x(clockwise=True)
+            self.rotate_active_bbox_safe("x", clockwise=True)
         elif a0.key() == Keys.Key_W:
             # move backward
             self.bbox_controller.translate_along_y()
@@ -343,7 +398,10 @@ class Controller:
         elif a0.key() in [Keys.Key_F, Keys.Key_Right]:
             # load next sample
             self.next_pcd()
-        elif a0.key() in [Keys.Key_T, Keys.Key_Up]:
+        elif a0.key() == Keys.Key_T:
+            # copy the labels from the most recent earlier labeled frame
+            self.copy_previous_frame_labels()
+        elif a0.key() == Keys.Key_Up:
             # select previous bbox
             self.select_relative_bbox(-1)
         elif a0.key() in [Keys.Key_G, Keys.Key_Down]:
@@ -376,6 +434,60 @@ class Controller:
         corner_case_id = 0 if step > 0 else max_id
         new_id = new_id if new_id in range(max_id + 1) else corner_case_id
         self.bbox_controller.set_active_bbox(new_id)
+
+    def rotate_active_bbox_safe(self, axis: str, clockwise: bool = False) -> None:
+        """Rotate the active bbox about its own axis by std_rotation, gimbal-safe.
+
+        Composes the increment as a rotation matrix onto the box's current
+        orientation and writes the result back as Euler angles, so x/y rotation
+        stays well-defined even near y = +/-90 deg. Deliberately bypasses
+        labelCloud's z_rotation_only guard, since c/v/b/n exist precisely to
+        adjust the x/y axes.
+        """
+        bbox = self.bbox_controller.get_active_bbox()
+        if bbox is None:
+            logging.warning("There is currently no active bounding box to rotate.")
+            return
+
+        dangle = config.getfloat("LABEL", "std_rotation")
+        if clockwise:
+            dangle = -dangle
+
+        x, y, z = bbox.get_rotations()
+        R = _euler_zyx_to_matrix(x, y, z)
+        drad = np.deg2rad(dangle)
+        dR = {"x": _rot_x, "y": _rot_y, "z": _rot_z}[axis](drad)
+        nx, ny, nz = _matrix_to_euler_zyx(R @ dR)  # body-frame increment
+        bbox.set_rotations(nx % 360, ny % 360, nz % 360)
+        self.bbox_controller.update_all()
+
+    def copy_previous_frame_labels(self) -> None:
+        """Copy the labels from the most recent earlier labeled frame into this one.
+
+        Scans backward from the current frame for the first frame whose label
+        file has any objects, imports those boxes (fresh copies) and appends
+        them to the current frame without disturbing existing boxes.
+        """
+        pm = self.pcd_manager
+        for idx in range(pm.current_id - 1, -1, -1):
+            candidates = pm.label_manager.import_labels(pm.pcds[idx])
+            if candidates:
+                for bbox in candidates:
+                    self.bbox_controller.add_bbox(bbox)
+                logging.info(
+                    "Copied %d label(s) from %s into the current frame.",
+                    len(candidates),
+                    pm.pcds[idx].stem,
+                )
+                self.view.status_manager.set_message(
+                    f"Copied {len(candidates)} label(s) from {pm.pcds[idx].stem}.",
+                    context=Context.DEFAULT,
+                )
+                return
+        logging.warning("No earlier labeled frame found to copy from.")
+        self.view.status_manager.set_message(
+            "No earlier labeled frame to copy from.", context=Context.DEFAULT
+        )
 
     def key_release_event(self, a0: QtGui.QKeyEvent) -> None:
         """Triggers actions when the user releases a key."""
