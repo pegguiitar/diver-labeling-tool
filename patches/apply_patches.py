@@ -23,6 +23,7 @@ files = {
     "controller.py":    pkg / "control"  / "controller.py",
     "centroid.py":      pkg / "io"       / "labels" / "centroid.py",
     "bbox.py":          pkg / "model"    / "bbox.py",
+    "viewer.py":        pkg / "view"     / "viewer.py",
 }
 
 for src_name, dst in files.items():
