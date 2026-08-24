@@ -406,9 +406,15 @@ class Controller:
         elif a0.key() == Keys.Key_Up:
             # select previous bbox
             self.select_relative_bbox(-1)
-        elif a0.key() in [Keys.Key_G, Keys.Key_Down]:
-            # select previous bbox
+        elif a0.key() == Keys.Key_Down:
+            # select next bbox
             self.select_relative_bbox(1)
+        elif a0.key() == Keys.Key_G:
+            # Re-stamp Sonar (overwrite): same action as the button - saves the
+            # seed frame, then propagates its sonar box forward, replacing any
+            # already-labeled frames for this link_id.
+            if hasattr(self.view, "_on_stamp_sonar_clicked"):
+                self.view._on_stamp_sonar_clicked(overwrite=True)
         elif a0.key() == Keys.Key_Y:
             # change bbox class to previous available class
             self.select_relative_class(-1)
