@@ -99,9 +99,10 @@ class GLWidget(QtOpenGL.QGLWidget):
 
         Lets the labeler see exactly which points each box captures. Drawn right
         after the cloud (under the same modelview transform, so coordinates line
-        up with both the cloud and the boxes) at a slightly larger point size.
-        GL_LEQUAL lets the enlarged highlight points overwrite the originals at
-        equal depth, while still being occluded by genuinely nearer points.
+        up with both the cloud and the boxes) at the same point size as the
+        cloud, so only the color changes. GL_LEQUAL lets the highlight points
+        overwrite the originals at equal depth, while still being occluded by
+        genuinely nearer points.
         """
         bboxes = self.bbox_controller.bboxes
         pcd = self.pcd_manager.pointcloud
@@ -118,7 +119,7 @@ class GLWidget(QtOpenGL.QGLWidget):
         oglhelper.draw_points(
             pcd.points[inside],
             color=INSIDE_POINT_COLOR,
-            point_size=int(pcd.point_size) + 3,
+            point_size=pcd.point_size,
         )
         GL.glDepthFunc(GL.GL_LESS)
 
