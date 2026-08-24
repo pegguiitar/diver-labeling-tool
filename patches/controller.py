@@ -338,11 +338,11 @@ class Controller:
 
         # BBOX MANIPULATION
         elif a0.key() == Keys.Key_Z:
-            # z rotate counterclockwise
-            self.bbox_controller.rotate_around_z()
+            # z rotate counterclockwise (gimbal-safe, body frame)
+            self.rotate_active_bbox_safe("z")
         elif a0.key() == Keys.Key_X:
             # z rotate clockwise
-            self.bbox_controller.rotate_around_z(clockwise=True)
+            self.rotate_active_bbox_safe("z", clockwise=True)
         elif a0.key() == Keys.Key_C:
             # y rotate counterclockwise (gimbal-safe, body frame)
             self.rotate_active_bbox_safe("y")
@@ -438,13 +438,22 @@ class Controller:
         self.bbox_controller.set_active_bbox(new_id)
 
     def rotate_active_bbox_safe(self, axis: str, clockwise: bool = False) -> None:
-        """Rotate the active bbox about its own axis by std_rotation, gimbal-safe.
+        """Rotate the active bbox about its own current local axis, gimbal-safe.
 
-        Composes the increment as a rotation matrix onto the box's current
-        orientation and writes the result back as Euler angles, so x/y rotation
-        stays well-defined even near y = +/-90 deg. Deliberately bypasses
-        labelCloud's z_rotation_only guard, since c/v/b/n exist precisely to
-        adjust the x/y axes.
+        Used by all six rotation keys (z/x, c/v, b/n). Composes the increment
+        as a rotation matrix onto the box's current orientation (body frame)
+        and writes the result back as Euler angles. Doing this for all three
+        axes - not just x/y - matters once more than one axis is non-zero:
+        directly incrementing a raw Euler field (the old z/x behavior) only
+        spins the box about its own axis while the other two angles are zero.
+        Past that, and especially once y approaches +/-90 deg (gimbal lock),
+        the raw z field stops corresponding to the box's actual local Z axis,
+        so "rotating z" visibly spins a different axis instead. Composing as a
+        matrix keeps every key meaning "spin about my own current axis",
+        continuously, regardless of the other two angles.
+
+        Deliberately bypasses labelCloud's z_rotation_only guard, since c/v/b/n
+        exist precisely to adjust the x/y axes.
         """
         bbox = self.bbox_controller.get_active_bbox()
         if bbox is None:
