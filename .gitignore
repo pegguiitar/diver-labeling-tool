@@ -3,6 +3,9 @@ __pycache__/
 *.pyo
 .DS_Store
 
+# labelCloud runtime log
+.labelCloud.log
+
 # labelCloud runtime writes config.ini with absolute paths — keep the template clean
 # (uncomment if you want to track config changes)
 # config.ini
