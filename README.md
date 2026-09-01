@@ -87,7 +87,7 @@ pip install "setuptools<70"
 
 ## 5. labelCloud 패치 적용
 
-이 툴은 설치된 labelCloud 패키지에 5가지 수정(카메라 패널 통합, 소나 좌표 보정, 프레임 동기화 훅, 라벨 저장 포맷 보존, 박스 방향 화살표)을 필요로 합니다. 아래 스크립트가 모두 자동 적용합니다:
+이 툴은 설치된 labelCloud 패키지에 6가지 수정(카메라 패널 통합, 소나 좌표 보정, 프레임 동기화 훅, 라벨 저장 포맷 보존, 박스 방향 화살표, 박스 내부 점 강조)을 필요로 합니다. 아래 스크립트가 모두 자동 적용합니다:
 
 ```bash
 python patches/apply_patches.py
@@ -101,6 +101,7 @@ python patches/apply_patches.py
   patched labelCloud/control/controller.py
   patched labelCloud/io/labels/centroid.py
   patched labelCloud/model/bbox.py
+  patched labelCloud/view/viewer.py
 Done.
 ```
 
@@ -204,6 +205,14 @@ python3 auto_track.py Person1 49 --modality sonar
 | Z축 (높이 방향) | 빨강 |
 
 각 화살표 길이는 해당 축의 박스 치수에 비례합니다. X축 화살표에는 앞면(front/right face)을 표시하는 십자선이 추가로 그려져, 길이와 너비가 비슷한 박스에서도 앞뒤를 구분할 수 있습니다. (표시 여부는 labelCloud 메뉴의 **Settings > Show Orientation** 체크박스로 켜고 끌 수 있습니다.)
+
+### 박스 안에 들어간 점 강조 (Inside-Box Point Highlight)
+
+어떤 박스든 그 안에 포함되는 포인트클라우드 점들은 **시안(cyan)** 색으로 다시 칠해져, 각 박스가 실제로 어떤 점을 담고 있는지 한눈에 볼 수 있습니다. 박스를 이동·회전·크기 조절하면 실시간으로 갱신됩니다. (현재 프레임의 모든 박스에 적용됩니다.)
+
+### 박스 내부 점 개수 (Points inside)
+
+오른쪽 패널의 **Points inside** 항목에 현재 선택된 박스 안에 들어간 점의 개수가 표시됩니다. 박스를 옮기거나 크기를 바꾸면 실시간으로 갱신되며, 위의 시안 하이라이트로 강조되는 점 개수와 동일합니다. 선택된 박스가 없으면 `—` 로 표시됩니다.
 
 ---
 

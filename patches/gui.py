@@ -293,6 +293,17 @@ class GUI(QtWidgets.QMainWindow):
         # Insert into the right-panel frame layout (verticalLayout_4)
         self.verticalLayout_4.addLayout(sonar_id_row)
 
+        # Show how many point-cloud points fall inside the active box
+        point_count_row = QtWidgets.QHBoxLayout()
+        point_count_row.addWidget(QLabel("Points inside:"))
+        self.label_point_count = QLabel("—")
+        self.label_point_count.setToolTip(
+            "Number of point-cloud points that fall inside the selected box"
+        )
+        point_count_row.addWidget(self.label_point_count)
+        point_count_row.addStretch()
+        self.verticalLayout_4.addLayout(point_count_row)
+
         # Stamp Sonar from Camera: copy the current frame's sonar box as-is
         # into following frames for as long as the camera box (ground truth)
         # still overlaps where it started, stopping (and popping up) the
@@ -778,6 +789,16 @@ class GUI(QtWidgets.QMainWindow):
 
     def update_bbox_stats(self, bbox) -> None:
         viewing_precision = config.getint("USER_INTERFACE", "viewing_precision")
+
+        # Number of point-cloud points inside the selected box (read-only, so
+        # updated even while a parameter field is being edited).
+        if hasattr(self, "label_point_count"):
+            pcd = self.controller.pcd_manager.pointcloud
+            if bbox and pcd is not None and pcd.points is not None:
+                self.label_point_count.setText(str(int(bbox.is_inside(pcd.points).sum())))
+            else:
+                self.label_point_count.setText("—")
+
         if bbox and not self.line_edited_activated():
             self.edit_pos_x.setText(str(round(bbox.get_center()[0], viewing_precision)))
             self.edit_pos_y.setText(str(round(bbox.get_center()[1], viewing_precision)))
